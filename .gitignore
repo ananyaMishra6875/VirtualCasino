@@ -1,0 +1,9 @@
+# Build output
+target/
+
+# IDE files (IntelliJ / Eclipse can regenerate these from pom.xml)
+.idea/
+*.iml
+.classpath
+.project
+.settings/
