@@ -13,6 +13,7 @@ package virtual.casino;
 import java.util.*;
 import javax.swing.JOptionPane;
 import java.io.*;
+import virtual.casino.core.BlackJack;
 import virtual.casino.core.Dice;
 import virtual.casino.core.HiLo;
 
@@ -45,7 +46,7 @@ public class VirtualCasino {
         //game prize money amount
         final int dice = Dice.PRIZE;
         final int hiLo = HiLo.PRIZE;
-        final int bj = 20;
+        final int bj = BlackJack.PRIZE;
         final int resetPwd = 5;
         final int lotto = 5;
         
@@ -130,62 +131,34 @@ public class VirtualCasino {
                 	System.out.println("\nWelcome to BlackJack!");
                 	//create the deck (52 cards) and shuffle
                     ArrayList<Integer> bjDeck = shuffleDeck(createDeck("bj"));
-                    ArrayList<Integer> userHand = new ArrayList<>();
-                    ArrayList<Integer> dealerHand = new ArrayList<>();
-                    int card = 0;
-                    //start off by dealing 2 cards to the dealer and player
-                    for (int i=0; i<4; i++) {
-                    	if (i%2 == 0) {
-                    		userHand.add(bjDeck.get(card));
-                    	}
-                    	else {
-                    		dealerHand.add(bjDeck.get(card));
-                    	}
-                    	bjDeck.remove(card);
-                    }
-                    
-                    boolean bjContinue = true;
-                    
+                    //the rules now live in core/BlackJack.java
+                    BlackJack game = new BlackJack(bjDeck);
+
                     //player's turn
-                    do {
-                    	System.out.println("\nYour hand: "+userHand);
+                    while (!game.isOver()) {
+                    	System.out.println("\nYour hand: "+game.playerHand()+" ("+BlackJack.handTotal(game.playerHand())+")");
                     	System.out.println("- Hit\n- Stand");
                     	System.out.print("Do you want to hit or stand? ");
                     	String userBjChoice = s.nextLine().toLowerCase();
                     	switch(userBjChoice) {
-                    		case "hit" -> {
-                    			userHand.add(bjDeck.get(card));
-                    			bjDeck.remove(card);
-                    		}
-                    		case "stand" -> {
-                    			bjContinue = false;
-                    		}
+                    		case "hit" -> game.hit();
+                    		case "stand" -> game.stand();
                     	}
-                    } while ((handSum(userHand) < 21) && (bjContinue));
-                    
-                    //dealer's turn
-                    while (handSum(dealerHand) < 17) {
-                    	dealerHand.add(bjDeck.get(card));
-            			bjDeck.remove(card);
                     }
-                    
+
                     //display hands
-                    System.out.println("Your hand: "+userHand);
-                    System.out.println("Dealer's hand: "+dealerHand);
-                    
+                    BlackJack.Result bjResult = game.result();
+                    System.out.println("Your hand: "+game.playerHand()+" ("+bjResult.playerTotal()+")");
+                    System.out.println("Dealer's hand: "+game.dealerHand()+" ("+bjResult.dealerTotal()+")");
+
                 	//win/lose tokens based on cards
-                    if (handSum(userHand) > 21) {
-                    	System.out.println("You bust! -"+bj+" Tokens");
-                    	tokens -= bj;
+                    switch (bjResult.outcome()) {
+                    	case BUST -> System.out.println("You bust! -"+bj+" Tokens");
+                    	case WIN -> System.out.println("You won! +"+bj+" Tokens");
+                    	case LOSE -> System.out.println("You lost! -"+bj+" Tokens");
+                    	case PUSH -> System.out.println("Push! It's a tie, no tokens won or lost.");
                     }
-                    else if ((handSum(userHand) > handSum(dealerHand)) || (handSum(dealerHand) > 21)) {
-                    	System.out.println("You won! +"+bj+" Tokens");
-                    	tokens += bj;
-                    }
-                    else if (handSum(userHand) < handSum(dealerHand)) {
-                    	System.out.println("You lost! -"+bj+" Tokens");
-                    	tokens -= bj;
-                    }
+                    tokens += bjResult.tokenChange();
                 }
                 case "reset password" -> {
                     JOptionPane.showMessageDialog(null, "Generating new password...");
@@ -579,15 +552,6 @@ public class VirtualCasino {
 	    	}
     	}
     	
-    }
-    
-    //create a method to calculate the sum of a hand
-    public static int handSum(ArrayList<Integer> hand) {
-    	int sum = 0;
-    	for (int i=0; i<hand.size(); i++) {
-    		sum += hand.get(i);
-    	}
-    	return sum;
     }
     
     
