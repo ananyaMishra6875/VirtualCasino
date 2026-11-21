@@ -12,13 +12,18 @@ package virtual.casino;
 //imports
 import java.util.*;
 import javax.swing.JOptionPane;
-import java.io.*;
+import java.nio.file.Path;
+import virtual.casino.core.Account;
 import virtual.casino.core.BlackJack;
 import virtual.casino.core.Dice;
 import virtual.casino.core.HiLo;
+import virtual.casino.core.Login;
 import virtual.casino.core.Lottery;
+import virtual.casino.core.LotteryDraw;
+import virtual.casino.core.LotteryStore;
 import virtual.casino.core.PasswordReset;
 import virtual.casino.core.SkillTest;
+import virtual.casino.core.UserStore;
 
 public class VirtualCasino {
 
@@ -53,49 +58,46 @@ public class VirtualCasino {
         final int resetPwd = PasswordReset.COST;
         final int lotto = Lottery.TICKET_COST;
         
+        //save files (rules in core/UserStore.java and core/LotteryStore.java)
+        UserStore users = new UserStore(Path.of("userInfo.txt"));
+        LotteryStore tickets = new LotteryStore(Path.of("lottery.txt"));
+
         //default user settings
         int vcAccess = 0;
-        int tokens = 100;
+        int tokens = Account.STARTING_TOKENS;
         int debt = 0;
-        String correctPassword = "secret";
         String userPassword = "";
-        
-        LinkedHashMap <String, LinkedHashMap<String, String>> fileData = new LinkedHashMap<>();
+        Account account = null;
+
         int lotteryNumAmt = Lottery.NUMBERS;
         int init = Lottery.MIN;
         int end = Lottery.MAX;
-        
+
         //ask for name and password
         String name = JOptionPane.showInputDialog("Enter your username.");
         //if casino manager enters, they dont need to enter password
-        if (name.equals("M0N3YL0VR")){
+        if (Login.isManager(name)){
             vcAccess = 2;
         }
-        //login for users
+        else if (!Account.isValidName(name)){
+            System.out.println("\n\nUsernames can't be empty or contain spaces or \"|\".");
+        }
+        //login for users (rules in core/Login.java)
         else{
+            Login login = new Login(users, name);
             userPassword = JOptionPane.showInputDialog("Enter your password.");
-            //load all user data from file into hashmap
-            fileData = readInfo();
-            //if name is registered on file, then fetch user info
-            if (fileData.get(name) != null) {
-                correctPassword = fileData.get(name).get("password");
-                tokens = Integer.parseInt(fileData.get(name).get("token"));
-                debt = Integer.parseInt(fileData.get(name).get("debt"));
+            login.tryPassword(userPassword);
+            //give them two more tries for the password
+            while (!login.passed() && !login.failed()) {
+                userPassword = JOptionPane.showInputDialog("Incorrect Password - Try Again.");
+                login.tryPassword(userPassword);
             }
             //if they get the password right, give them access
-            if(userPassword.equals(correctPassword)) {
+            if (login.passed()) {
                 vcAccess = 1;
-            }
-            //give them two more tries for the password
-            else {
-                for (int i=0; i<2; i++) {
-                    userPassword = JOptionPane.showInputDialog("Incorrect Password - Try Again.");
-                    //if they get the password right, give them access
-                    if(userPassword.equals(correctPassword)){
-                        vcAccess = 1;
-                        break;
-                    }
-                }
+                account = login.account();
+                tokens = account.tokens();
+                debt = account.debt();
             }
         }
         int hasEntered = vcAccess;
@@ -214,7 +216,7 @@ public class VirtualCasino {
                     }
                     //store lotto data in file, only if a ticket was actually bought
                     if (Lottery.isValidTicket(userNumList)) {
-                        lotteryData(name,userNumList);
+                        tickets.add(name,userNumList);
                     }
                 }
                 case "cash out" -> {
@@ -242,22 +244,11 @@ public class VirtualCasino {
                     }
                     System.out.println("\nCorrect answer! Be sure to return to The Virtual Casino!");
                     
-                    //if name is found in file (not null), put info
-                    if (fileData.get(name) != null) {
-                        //Update the hashmap with updated user data
-                        fileData.get(name).put("password",userPassword);
-                        fileData.get(name).put("token",String.valueOf(tokens));
-                    }
-                    //if name is not found in file, create hashmap for new info
-                    else {
-                        LinkedHashMap <String,String> localHM = new LinkedHashMap<>();
-                        localHM.put("password",userPassword);
-                        localHM.put("token",String.valueOf(tokens));
-                        fileData.put(name,localHM);
-                    }
-                    //save the fileData hashmap to the file
-                    userInfo(fileData);
-                    
+                    //save the updated user data to the file (debt is saved from the tokens)
+                    account.setPassword(userPassword);
+                    account.setTokens(tokens);
+                    users.save(account);
+
                     System.exit(0);
                 }
                 default -> {
@@ -269,10 +260,20 @@ public class VirtualCasino {
         if(vcAccess == 2){
             JOptionPane.showMessageDialog(null, "Welcome, Casino Manager! Would you like to draw the lottery?");
             //generate and store lottery numbers in array
-            int[] lotteryNums = Lottery.randomNumbers(new Random());
+            int[] lotteryNums = Lottery.randomNumbers(r);
             System.out.println("\n\nLottery Numbers: "+Arrays.toString(lotteryNums));
-            //call lotteryPrize() method to payout lottery wins
-            lotteryPrize(lotteryNums);
+            //payout lottery wins (rules in core/LotteryDraw.java)
+            List<LotteryDraw.TicketResult> results = LotteryDraw.payOut(lotteryNums, tickets, users);
+            boolean anyWinners = false;
+            for (LotteryDraw.TicketResult result : results) {
+                if (result.prize() > 0) {
+                    System.out.println(result.name()+" matched "+result.matches()+" numbers and won "+result.prize()+" Tokens!");
+                    anyWinners = true;
+                }
+            }
+            if (!anyWinners) {
+                System.out.println("No winners this time.");
+            }
             System.out.println("\nThank you for visisting!");
         }
     }
@@ -287,110 +288,6 @@ public class VirtualCasino {
             }
             System.out.println("Menu:\n- Dice ("+dice+" Tokens)\n- Hi-Lo ("+hiLo+" Tokens)\n- BlackJack ("+bj+" Tokens)\n- Reset Password ("+resetPwd+" Tokens) \n- Lottery Ticket ("+lotto+" Tokens)\n- Cash Out");
             System.out.print("What would you like to do? ");
-    }
-    
-    //create a method to store user information in a file
-    public static void userInfo(LinkedHashMap <String, LinkedHashMap<String, String>> fileData){
-        try{
-            //create file to write to
-            PrintWriter pw = new PrintWriter(new File("userInfo.txt"));
-            //read each user data in the for loop
-            for (String key : fileData.keySet()){
-                String fileRecord = key + " " + fileData.get(key).get("password") + " " + fileData.get(key).get("token") + " " + fileData.get(key).get("debt");
-                pw.println(fileRecord);
-            }
-            pw.close();
-        }
-        catch(IOException e){
-            System.out.println("An error occurred: "+e);
-        }
-    }
-    
-    //create a method to read in the info stored in userInfo() and update password
-    public static LinkedHashMap <String, LinkedHashMap<String, String>> readInfo(){
-        //create hashmaps to store user info
-        LinkedHashMap <String, LinkedHashMap<String, String>> fileData = new LinkedHashMap <>();
-        try{
-            Scanner s = new Scanner(new File("userInfo.txt"));
-            while(s.hasNext()){
-                LinkedHashMap <String, String> userData = new LinkedHashMap<>();
-                //grab next() and add local variables for names, passwords, and tokens to hashmap
-                String localName = s.next();
-                String localPassword = s.next();
-                String localToken = s.next();
-                String localDebt = s.next();
-                
-                userData.put("password",localPassword);
-                userData.put("token",localToken);
-                userData.put("debt", localDebt);
-                fileData.put(localName, userData);
-            }
-        } catch(IOException e){
-            System.out.println("An error has occurred: "+e);
-        }
-        //return file data with all users info
-        return fileData;
-    }
-    
-    //create a method to store user lottery ticket numbers in a file
-    public static void lotteryData(String name, int[] lottoNums){
-        try{
-            //create file to write to
-            PrintWriter pw = new PrintWriter(new FileWriter("lottery.txt",true));
-            pw.println(name+"|"+Arrays.toString(lottoNums));
-            pw.close();
-        }
-        catch(IOException e){
-            System.out.println("An error has occurred: "+e);
-        }
-    }
-    
-    //create a method to read lottery info and give out prizes to winners
-    public static void lotteryPrize(int[] lotteryNums){
-        try{
-            Scanner s = new Scanner(new File("lottery.txt"));
-            while(s.hasNext()){
-                //read the line into a variable
-                String sLine = s.nextLine();
-                
-                //get the name from the lottery file
-                String name = sLine.split("\\|")[0];
-                
-                String lotteryNumbers = sLine.split("\\|")[1];
-                String lottoList = lotteryNumbers.split("\\[")[1].split("\\]")[0]; //gets string of lotto numbers
-                String[] ticketParts = lottoList.split(", ");
-                int[] ticket = new int[ticketParts.length];
-                for(int i=0; i<ticketParts.length; i++){
-                    ticket[i] = Integer.parseInt(ticketParts[i]);
-                }
-                //count how many numbers are correct and determine prize money (rules in core/Lottery.java)
-                int prize = Lottery.prize(Lottery.matches(ticket, lotteryNums));
-                //update user payout with prize and save updated data to the file
-                userInfo(updateUserPayout(name, prize));
-            }
-            //clear lottery file
-            PrintWriter pw = new PrintWriter(new File("lottery.txt"));
-            pw.close();
-        }
-        catch(IOException e){
-            System.out.println("An error has occurred: "+e);
-        }
-    }
-    
-    //create a method to update user payout with the amount of tokens won
-    public static LinkedHashMap <String, LinkedHashMap<String, String>> updateUserPayout(String name, int prize){
-        LinkedHashMap <String, LinkedHashMap<String, String>> fileData = new LinkedHashMap<>();
-        try{
-            //update token value with prize specific to the name associated with the prize
-            fileData = readInfo();
-            String sToken = fileData.get(name).get("token");
-            sToken = String.valueOf(Integer.parseInt(sToken) + prize);
-            fileData.get(name).put("token", sToken);
-        }
-        catch(Exception e){
-            System.out.println("An error has occured: "+e);
-        }
-        return fileData;
     }
     
     //create a method to shuffle cards
