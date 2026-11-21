@@ -13,6 +13,7 @@ package virtual.casino;
 import java.util.*;
 import javax.swing.JOptionPane;
 import java.io.*;
+import virtual.casino.core.Dice;
 
 public class VirtualCasino {
 
@@ -41,7 +42,7 @@ public class VirtualCasino {
         }
         
         //game prize money amount
-        final int dice = 10;
+        final int dice = Dice.PRIZE;
         final int hiLo = 15;
         final int bj = 20;
         final int resetPwd = 5;
@@ -108,26 +109,15 @@ public class VirtualCasino {
                     System.out.println("\nWelcome to CRAPS!");
                     String userCRAPSGuess = JOptionPane.showInputDialog("Select a number between 4-12.");
                     int crapsGuess = Integer.parseInt(userCRAPSGuess);
-                    int diceRoll = (r.nextInt(6)+1)+(r.nextInt(6)+1);
-                    if (diceRoll == 2 || diceRoll == 3) {
-                        diceRoll = (r.nextInt(6)+1)+(r.nextInt(6)+1);
-                        if (crapsGuess == diceRoll) {
-                            System.out.println("You won! +"+dice+" Tokens");
-                            tokens += dice;
-                        }
-                        else {
-                            System.out.println("You lost! -"+dice+" Tokens");
-                            tokens -= dice;
-                        }
-                    }
-                    else if (crapsGuess == diceRoll) {
+                    //the rules now live in core/Dice.java
+                    Dice.Result diceResult = new Dice(r).play(crapsGuess);
+                    if (diceResult.won()) {
                         System.out.println("You won! +"+dice+" Tokens");
-                        tokens += dice;
                     }
                     else {
                         System.out.println("You lost! -"+dice+" Tokens");
-                        tokens -= dice;
                     }
+                    tokens += diceResult.tokenChange();
                 }
                 case "hi-lo" -> {
                     System.out.println("\nWelcome to Hi-Lo!");
