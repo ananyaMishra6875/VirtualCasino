@@ -16,6 +16,7 @@ import java.io.*;
 import virtual.casino.core.BlackJack;
 import virtual.casino.core.Dice;
 import virtual.casino.core.HiLo;
+import virtual.casino.core.Lottery;
 import virtual.casino.core.PasswordReset;
 import virtual.casino.core.SkillTest;
 
@@ -50,7 +51,7 @@ public class VirtualCasino {
         final int hiLo = HiLo.PRIZE;
         final int bj = BlackJack.PRIZE;
         final int resetPwd = PasswordReset.COST;
-        final int lotto = 5;
+        final int lotto = Lottery.TICKET_COST;
         
         //default user settings
         int vcAccess = 0;
@@ -60,9 +61,9 @@ public class VirtualCasino {
         String userPassword = "";
         
         LinkedHashMap <String, LinkedHashMap<String, String>> fileData = new LinkedHashMap<>();
-        int lotteryNumAmt = 5;
-        int init = 1;
-        int end = 30;
+        int lotteryNumAmt = Lottery.NUMBERS;
+        int init = Lottery.MIN;
+        int end = Lottery.MAX;
         
         //ask for name and password
         String name = JOptionPane.showInputDialog("Enter your username.");
@@ -183,14 +184,14 @@ public class VirtualCasino {
                             for(int i=0; i<lotteryNumAmt; i++){
                                 System.out.print("Enter a number from "+init+"-"+end+": ");
                                 int userNum = s.nextInt();
-                                while((userNum<init || userNum>end) || (numberExists(userNum,userNumList))) {
+                                while(!Lottery.inRange(userNum) || Lottery.numberExists(userNum,userNumList)) {
                                 	//check for number in range
-                                    while(userNum<init || userNum>end){
+                                    while(!Lottery.inRange(userNum)){
                                         System.out.print("Number out of given range. Enter a number from "+init+"-"+end+": ");
                                         userNum = s.nextInt();
                                     }
                                     //check if number entered already exists in the list
-                                    while (numberExists(userNum,userNumList)){
+                                    while (Lottery.numberExists(userNum,userNumList)){
                                         System.out.print("Number already used. Enter a different number from "+init+"-"+end+": ");
                                         userNum = s.nextInt();
                                     }
@@ -205,13 +206,16 @@ public class VirtualCasino {
                         //randomize 5 distinct numbers from 1-30
                         case "randomize" -> {
                             System.out.println("Randomizing "+lotteryNumAmt+" numbers from "+init+"-"+end+"...");
-                            userNumList = lottery(init, end, lotteryNumAmt);
+                            userNumList = Lottery.randomNumbers(r);
                             System.out.println("Your lottery ticket has been submitted!");
                             tokens -= lotto;
                         }
+                        default -> System.out.println("Invalid option. No ticket was bought.");
                     }
-                    //store lotto data in file
-                    lotteryData(name,userNumList);
+                    //store lotto data in file, only if a ticket was actually bought
+                    if (Lottery.isValidTicket(userNumList)) {
+                        lotteryData(name,userNumList);
+                    }
                 }
                 case "cash out" -> {
                     //the rules now live in core/SkillTest.java
@@ -265,7 +269,7 @@ public class VirtualCasino {
         if(vcAccess == 2){
             JOptionPane.showMessageDialog(null, "Welcome, Casino Manager! Would you like to draw the lottery?");
             //generate and store lottery numbers in array
-            int[] lotteryNums = lottery(init, end, lotteryNumAmt);
+            int[] lotteryNums = Lottery.randomNumbers(new Random());
             System.out.println("\n\nLottery Numbers: "+Arrays.toString(lotteryNums));
             //call lotteryPrize() method to payout lottery wins
             lotteryPrize(lotteryNums);
@@ -328,44 +332,6 @@ public class VirtualCasino {
         return fileData;
     }
     
-    //create a method to check if number entered already exists in the list (for the lottery)
-    public static boolean numberExists(int number, int[] numList){
-        //System.out.println("number: " + number);
-        //System.out.println("numList: " + Arrays.toString(numList));
-        boolean result = false;
-        for (int num: numList){
-            if (number == num){
-                result = true;
-                break;
-            }
-        }
-        return result;
-    }
-    
-    //create a method to randomly generate distinct lottery numbers
-    public static int[] lottery(int init, int end, int nums){
-        Random r = new Random();
-        int[] lotteryNums = new int[nums];
-        int randNum = 0;
-        for (int i=0; i<nums; i++){
-            boolean isDistinct;
-            do{
-                isDistinct = true;
-                //generate random number within range
-                randNum = r.nextInt(end-init+1)+init;
-                //check if number is already used
-                for (int value : lotteryNums){
-                    if (randNum == value) {
-                        isDistinct = false; //not distinct
-                    }
-                }
-            }
-            while (!isDistinct); //repeats until distinct number is found
-            lotteryNums[i] = randNum;
-        }
-        return lotteryNums;
-    }
-    
     //create a method to store user lottery ticket numbers in a file
     public static void lotteryData(String name, int[] lottoNums){
         try{
@@ -381,13 +347,9 @@ public class VirtualCasino {
     
     //create a method to read lottery info and give out prizes to winners
     public static void lotteryPrize(int[] lotteryNums){
-        int lotteryNumAmt = lotteryNums.length;
         try{
             Scanner s = new Scanner(new File("lottery.txt"));
             while(s.hasNext()){
-                int count = 0;
-                int prize = 0;
-                
                 //read the line into a variable
                 String sLine = s.nextLine();
                 
@@ -395,21 +357,14 @@ public class VirtualCasino {
                 String name = sLine.split("\\|")[0];
                 
                 String lotteryNumbers = sLine.split("\\|")[1];
-                //count how many numbers are correct
                 String lottoList = lotteryNumbers.split("\\[")[1].split("\\]")[0]; //gets string of lotto numbers
-                for(int i=0; i<lotteryNumAmt; i++){
-                    for (int lottoNum : lotteryNums){
-                        if (Integer.parseInt(lottoList.split(", ")[i]) == lottoNum){
-                            count++;
-                        }
-                    }
+                String[] ticketParts = lottoList.split(", ");
+                int[] ticket = new int[ticketParts.length];
+                for(int i=0; i<ticketParts.length; i++){
+                    ticket[i] = Integer.parseInt(ticketParts[i]);
                 }
-                //determine prize money based on count
-                switch(count){
-                    case 3 -> prize = 5;
-                    case 4 -> prize = 2000;
-                    case 5 -> prize = 10000;
-                }
+                //count how many numbers are correct and determine prize money (rules in core/Lottery.java)
+                int prize = Lottery.prize(Lottery.matches(ticket, lotteryNums));
                 //update user payout with prize and save updated data to the file
                 userInfo(updateUserPayout(name, prize));
             }
