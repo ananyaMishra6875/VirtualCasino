@@ -16,6 +16,8 @@ import java.io.*;
 import virtual.casino.core.BlackJack;
 import virtual.casino.core.Dice;
 import virtual.casino.core.HiLo;
+import virtual.casino.core.PasswordReset;
+import virtual.casino.core.SkillTest;
 
 public class VirtualCasino {
 
@@ -47,7 +49,7 @@ public class VirtualCasino {
         final int dice = Dice.PRIZE;
         final int hiLo = HiLo.PRIZE;
         final int bj = BlackJack.PRIZE;
-        final int resetPwd = 5;
+        final int resetPwd = PasswordReset.COST;
         final int lotto = 5;
         
         //default user settings
@@ -162,19 +164,9 @@ public class VirtualCasino {
                 }
                 case "reset password" -> {
                     JOptionPane.showMessageDialog(null, "Generating new password...");
-                    userPassword = "";
-                    
-                    //generate a random letter for first character
-                    userPassword = resetPassword(r, userPassword, 2);
-                    
-                    //generate a random character for the second, third, fourth, fifth letter
-                    for(int i = 0; i<4; i++) {
-                        userPassword = resetPassword(r, userPassword, 3);
-                    }
-                    
-                    //generate a random letter for last character
-                    userPassword = resetPassword(r, userPassword, 2);
-                    
+                    //the rules now live in core/PasswordReset.java
+                    userPassword = PasswordReset.generate(r);
+
                     JOptionPane.showMessageDialog(null,"Your new password is: "+userPassword);
                     tokens -= resetPwd;
                 }
@@ -222,11 +214,8 @@ public class VirtualCasino {
                     lotteryData(name,userNumList);
                 }
                 case "cash out" -> {
-                    //randomize A B and C for the stq and get the answer
-                    int stqA = r.nextInt(15)+1;
-                    int stqB = r.nextInt(15)+1;
-                    int stqC = r.nextInt(15)+1;
-                    int stqAnswer = stqA+stqB*stqC;
+                    //the rules now live in core/SkillTest.java
+                    SkillTest skillTest = new SkillTest(r);
                     if (tokens<0){
                         System.out.println("\nYour balance is "+0+" Tokens");
                         System.out.println("**You are "+(tokens*(-1))+" tokens in debt!**");
@@ -235,25 +224,16 @@ public class VirtualCasino {
                         System.out.println("\nYour balance is "+tokens+" Tokens");
                     }
                     System.out.println("Skill Testing Question required to exit:");
-                    System.out.print(stqA+" + "+stqB+" * "+stqC+" = ");
-                    int userStqAnswer = s.nextInt();
-                    if (userStqAnswer != stqAnswer) {
-                        //give them two more tries
-                        for (int i = 0; i<2; i++) {
-                            stqA = r.nextInt(15)+1;
-                            stqB = r.nextInt(15)+1;
-                            stqC = r.nextInt(15)+1;
-                            stqAnswer = stqA+stqB*stqC;
-                            //display question in the format a+b*c
+                    //display question in the format a+b*c, with 3 tries
+                    while (!skillTest.passed()) {
+                        System.out.print(skillTest.question().text()+" = ");
+                        int userStqAnswer = s.nextInt();
+                        skillTest.answer(userStqAnswer);
+                        if (skillTest.failed()) {
+                            System.exit(0);
+                        }
+                        if (!skillTest.passed()) {
                             System.out.println("Incorrect Answer. Try Again:");
-                            System.out.print(stqA+" + "+stqB+" * "+stqC+" = ");
-                            userStqAnswer = s.nextInt();
-                            if (userStqAnswer == stqAnswer) {
-                                break;
-                            }
-                            else if(i == 1 && userStqAnswer != stqAnswer) {
-                                System.exit(0);
-                            }
                         }
                     }
                     System.out.println("\nCorrect answer! Be sure to return to The Virtual Casino!");
@@ -291,18 +271,6 @@ public class VirtualCasino {
             lotteryPrize(lotteryNums);
             System.out.println("\nThank you for visisting!");
         }
-    }
-    
-    //create a method to reset the password with Random, password, and how many numbers to randomize parameters
-    public static String resetPassword(Random r, String password, int num){
-        int passwordChar = r.nextInt(num);
-        switch(passwordChar){
-            //randomizes lowercase, uppercase, and numbers based on randomized case
-            case 0 -> password = password + (char)(r.nextInt(26)+'a');
-            case 1 -> password = password + (char)(r.nextInt(26)+'A');
-            case 2 -> password = password + (r.nextInt(10)+1);
-        }
-        return password;
     }
     
     //create a method to display the menu
