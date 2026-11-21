@@ -14,6 +14,7 @@ import java.util.*;
 import javax.swing.JOptionPane;
 import java.io.*;
 import virtual.casino.core.Dice;
+import virtual.casino.core.HiLo;
 
 public class VirtualCasino {
 
@@ -43,7 +44,7 @@ public class VirtualCasino {
         
         //game prize money amount
         final int dice = Dice.PRIZE;
-        final int hiLo = 15;
+        final int hiLo = HiLo.PRIZE;
         final int bj = 20;
         final int resetPwd = 5;
         final int lotto = 5;
@@ -123,7 +124,7 @@ public class VirtualCasino {
                     System.out.println("\nWelcome to Hi-Lo!");
                     //create the deck (52 cards) and shuffle
                     ArrayList<Integer> hiLoDeck = shuffleDeck(createDeck("hiLo"));
-                    tokens += hiLoGame(hiLoDeck,hiLo);
+                    tokens += hiLoGame(hiLoDeck);
                 }
                 case "blackjack" -> {
                 	System.out.println("\nWelcome to BlackJack!");
@@ -510,73 +511,39 @@ public class VirtualCasino {
     }
     
     //create a method for the hi-lo game returning the amount of tokens won/lost after playing
-    public static int hiLoGame(ArrayList<Integer> deck, int hiLo) {
-    	//System.out.println(deck);
+    public static int hiLoGame(ArrayList<Integer> deck) {
     	Scanner s = new Scanner(System.in);
-    	boolean win = false;
-    	int ties = 0;
-    	int cardIndex = 0;
-    	int card = deck.get(cardIndex);
-    	String cardDisplay = "";
-    	int newCard = deck.get(cardIndex+1);
-    	switch(card) {
-    		case  1 -> cardDisplay = "A";
-    		case 11 -> cardDisplay = "J";
-    		case 12 -> cardDisplay = "Q";
-    		case 13 -> cardDisplay = "K";
-    		default -> cardDisplay = String.valueOf(card);
+    	//the rules now live in core/HiLo.java
+    	HiLo game = new HiLo(deck);
+    	System.out.println("A "+HiLo.cardName(game.currentCard())+" has been drawn.");
+    	while (true) {
+    		System.out.println("- Lower\n- Higher");
+    		System.out.print("Is the next card going to be lower or higher? ");
+    		String userGuess = s.nextLine().toLowerCase();
+    		HiLo.Guess guess = switch (userGuess) {
+    			case "lower" -> HiLo.Guess.LOWER;
+    			case "higher" -> HiLo.Guess.HIGHER;
+    			default -> null;
+    		};
+    		HiLo.Turn turn = game.guess(guess);
+
+    		//on a tie, guess again
+    		if (turn.outcome() == HiLo.Outcome.TIE) {
+    			System.out.println("It appears it was a tie! Guess again for a bigger prize.");
+    			continue;
+    		}
+
+    		System.out.print("The next card was a "+HiLo.cardName(turn.nextCard())+". ");
+
+    		//return winning/losing money
+    		if (turn.outcome() == HiLo.Outcome.WIN) {
+    			System.out.println("You won! +"+turn.tokenChange()+" Tokens");
+    		}
+    		else {
+    			System.out.println("You lost! -"+HiLo.PRIZE+" Tokens");
+    		}
+    		return turn.tokenChange();
     	}
-    	System.out.println("A "+cardDisplay+" has been drawn.");
-		System.out.println("- Lower\n- Higher");
-		System.out.print("Is the next card going to be lower or higher? ");
-		String userGuess = s.nextLine();
-		
-		//if new card is the same as the old one
-		if (newCard == card) {
-			//keep dealing cards until no more ties
-			do {
-				System.out.println("It appears it was a tie!");
-				ties++;
-				cardIndex++;
-				card = deck.get(cardIndex);
-		    	newCard = deck.get(cardIndex+1);
-		    	System.out.println("- Lower\n- Higher");
-				System.out.print("Is the next card going to be lower or higher? ");
-				userGuess = s.nextLine();
-			} while(newCard == card);
-			
-			//if they only tied once, they lose, otherwise they win 2n times the bet
-			if (ties > 1) {
-				System.out.println("You won! +"+(hiLo*ties*2)+" Tokens");
-				return hiLo*ties*2;
-			}
-			else {
-				System.out.println("You lost! -"+hiLo+" Tokens");
-				return hiLo*(-1);
-			}
-		}
-		
-		//if new card is higher than the old one
-		else if (newCard < card) {
-			win = (userGuess.toLowerCase().equals("lower")) ? true : false;
-		}
-		
-		//if new card is lower than the old one
-		else if (newCard > card) {
-			win = (userGuess.toLowerCase().equals("higher")) ? true : false;
-		}
-		
-		System.out.print("The next card was a "+newCard+". ");
-		
-		//return winning/losing money
-		if (win == true) {
-			System.out.println("You won! +"+hiLo+" Tokens");
-			return hiLo;
-		}
-		else {
-			System.out.println("You lost! -"+hiLo+" Tokens");
-			return hiLo*(-1);
-		}
     }
     
     //create a method to create a deck of cards
