@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Virtual Casino</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <header class="topbar" id="topbar" hidden>
+    <button class="brand" data-go="lobby">Virtual Casino</button>
+    <div class="wallet">
+      <span class="chip-icon" aria-hidden="true"></span>
+      <span><strong id="balance">0</strong> tokens</span>
+      <span class="debt" id="debt" hidden></span>
+      <span class="who" id="who"></span>
+      <button class="link" id="logout">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Login -->
+    <section class="view" id="view-login">
+      <div class="card login-card">
+        <p class="eyebrow">Welcome to</p>
+        <h1 class="title">V I R T U A L<br>C A S I N O</h1>
+        <div class="stars" aria-hidden="true">★ ★ ★ ★ ★</div>
+        <form id="login-form" autocomplete="off">
+          <label>Username
+            <input id="name" name="name" required maxlength="30" placeholder="Your name">
+          </label>
+          <label>Password
+            <input id="password" name="password" type="password" placeholder="Your password">
+          </label>
+          <p class="hint">New here? Pick a username and use the password <code>secret</code>. You start with 100 tokens.</p>
+          <p class="error" id="login-error" role="alert"></p>
+          <button class="btn gold" type="submit">Enter the casino</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Lobby -->
+    <section class="view" id="view-lobby" hidden>
+      <h2 class="greeting" id="greeting"></h2>
+      <p class="sub">Choose a table.</p>
+      <div class="games">
+        <button class="game" data-go="dice">
+          <span class="game-art">⚄</span>
+          <span class="game-name">Dice</span>
+          <span class="game-desc">Guess the total of two dice.</span>
+          <span class="game-stake">Win or lose 10</span>
+        </button>
+        <div class="game soon">
+          <span class="game-art">▲▼</span>
+          <span class="game-name">Hi-Lo</span>
+          <span class="game-desc">Higher or lower than the card?</span>
+          <span class="game-stake">Coming soon</span>
+        </div>
+        <div class="game soon">
+          <span class="game-art">♠</span>
+          <span class="game-name">BlackJack</span>
+          <span class="game-desc">Get to 21 without going over.</span>
+          <span class="game-stake">Coming soon</span>
+        </div>
+        <div class="game soon">
+          <span class="game-art">7</span>
+          <span class="game-name">Lottery</span>
+          <span class="game-desc">Pick your numbers for the draw.</span>
+          <span class="game-stake">Coming soon</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dice -->
+    <section class="view" id="view-dice" hidden>
+      <button class="link back" data-go="lobby">← Lobby</button>
+      <div class="table">
+        <h2 class="table-title">CRAPS</h2>
+        <p class="sub">Pick the total of two dice. Guess right to win 10 tokens, wrong and you lose 10.
+          Roll a 2 or 3 and the dice are rolled again.</p>
+        <div class="dice-row">
+          <div class="die" id="die1"></div>
+          <div class="die" id="die2"></div>
+        </div>
+        <p class="outcome" id="dice-outcome" aria-live="polite">&nbsp;</p>
+        <div class="guesses" id="guesses"></div>
+        <button class="btn gold" id="roll" disabled>Pick a number</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

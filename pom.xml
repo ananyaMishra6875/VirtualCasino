@@ -16,6 +16,24 @@
     </properties>
 
     <dependencies>
+        <!-- Javalin, the small web server for the web version -->
+        <dependency>
+            <groupId>io.javalin</groupId>
+            <artifactId>javalin</artifactId>
+            <version>7.3.0</version>
+        </dependency>
+        <!-- Turns Java objects into JSON for the web pages -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.23.0</version>
+        </dependency>
+        <!-- Prints the server's log messages to the console -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>2.0.17</version>
+        </dependency>
         <!-- JUnit, only for the tests in src/test/java -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
