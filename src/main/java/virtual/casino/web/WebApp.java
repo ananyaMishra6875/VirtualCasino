@@ -1,6 +1,9 @@
 package virtual.casino.web;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
@@ -12,6 +15,7 @@ import io.javalin.http.HttpStatus;
 import io.javalin.http.staticfiles.Location;
 import virtual.casino.core.Account;
 import virtual.casino.core.Dice;
+import virtual.casino.core.HiLo;
 import virtual.casino.core.Login;
 import virtual.casino.core.UserStore;
 
@@ -29,6 +33,8 @@ public class WebApp {
     private static final String LOGIN = "login";
     private static final String LOGIN_NAME = "loginName";
     private static final String PLAYER = "player";
+    /** Session key: the Hi-Lo game in progress, if there is one. */
+    private static final String HILO = "hilo";
 
     private final UserStore users;
     private final Random r = new Random();
@@ -51,6 +57,8 @@ public class WebApp {
             config.routes.post("/api/logout", this::logout);
             config.routes.get("/api/me", this::me);
             config.routes.post("/api/dice", this::dice);
+            config.routes.post("/api/hilo/start", this::hiLoStart);
+            config.routes.post("/api/hilo/guess", this::hiLoGuess);
 
             //rules in core throw this for bad input: send the message to the page
             config.routes.exception(IllegalArgumentException.class, (e, ctx) ->
@@ -63,6 +71,7 @@ public class WebApp {
 
     record LoginRequest(String name, String password) {}
     record DiceRequest(int guess) {}
+    record HiLoRequest(HiLo.Guess guess) {}
 
     /** Log in, with 3 tries for the password like the console version. */
     private void login(Context ctx) {
@@ -132,6 +141,76 @@ public class WebApp {
         account.addTokens(result.tokenChange());
         users.save(account);
         ctx.json(Map.of("result", result, "player", player(account, false)));
+    }
+
+    /**
+     * Deal a new Hi-Lo game (rules in core/HiLo.java) and show the first card.
+     * If a game is already going, that one is shown again instead,
+     * so reloading the page can't swap away a bad card.
+     */
+    private void hiLoStart(Context ctx) {
+        Account account = loggedIn(ctx);
+        if (account == null) {
+            return;
+        }
+        HiLo game = ctx.sessionAttribute(HILO);
+        if (game == null) {
+            game = new HiLo(shuffledDeck());
+            ctx.sessionAttribute(HILO, game);
+        }
+        ctx.json(Map.of(
+            "card", game.currentCard(),
+            "cardName", HiLo.cardName(game.currentCard()),
+            "ties", game.ties(),
+            "prize", hiLoPrize(game.ties()),
+            "player", player(account, false)));
+    }
+
+    /** Guess if the next card is HIGHER or LOWER. On a tie the game goes on. */
+    private void hiLoGuess(Context ctx) {
+        Account account = loggedIn(ctx);
+        if (account == null) {
+            return;
+        }
+        HiLo game = ctx.sessionAttribute(HILO);
+        if (game == null) {
+            error(ctx, HttpStatus.BAD_REQUEST, "Deal a card first.");
+            return;
+        }
+        HiLo.Guess guess = ctx.bodyAsClass(HiLoRequest.class).guess();
+        if (guess == null) {
+            error(ctx, HttpStatus.BAD_REQUEST, "Pick higher or lower.");
+            return;
+        }
+        HiLo.Turn turn = game.guess(guess);
+        if (game.isOver()) {
+            ctx.sessionAttribute(HILO, null);
+            account.addTokens(turn.tokenChange());
+            users.save(account);
+        }
+        ctx.json(Map.of(
+            "turn", turn,
+            "cardName", HiLo.cardName(turn.card()),
+            "nextCardName", HiLo.cardName(turn.nextCard()),
+            "prize", hiLoPrize(turn.ties()),
+            "player", player(account, false)));
+    }
+
+    /** What a right guess wins after this many ties (see core/HiLo.java). */
+    private static int hiLoPrize(int ties) {
+        return ties == 0 ? HiLo.PRIZE : HiLo.PRIZE * ties * 2;
+    }
+
+    /** A shuffled Hi-Lo deck: 52 cards, four of each 1-13, like the console version. */
+    private List<Integer> shuffledDeck() {
+        List<Integer> deck = new ArrayList<>();
+        for (int suit = 0; suit < 4; suit++) {
+            for (int card = 1; card <= 13; card++) {
+                deck.add(card);
+            }
+        }
+        Collections.shuffle(deck, r);
+        return deck;
     }
 
     /** The logged in player's saved account, or null after sending a 401. */
