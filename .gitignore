@@ -1,5 +1,6 @@
-# Build output
+# Build output (Maven, and IntelliJ when it isn't using Maven)
 target/
+out/
 
 # IDE files (IntelliJ / Eclipse can regenerate these from pom.xml)
 .idea/
