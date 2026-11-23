@@ -21,6 +21,7 @@ function show(view) {
   document.querySelectorAll(".view").forEach((v) => (v.hidden = v.id !== "view-" + view));
   $("topbar").hidden = view === "login";
   if (view === "dice") resetDice();
+  if (view === "hilo") startHiLo();
 }
 
 document.addEventListener("click", (e) => {
@@ -141,6 +142,111 @@ $("roll").addEventListener("click", async () => {
 });
 
 const total = (roll) => roll.die1 + roll.die2;
+
+// ---------- hi-lo ----------
+// The server only knows card values (1-13), so the suit is just for looks.
+const SUITS = ["♠", "♥", "♦", "♣"];
+let hiLoBusy = false;
+
+function drawCard(el, name, suit = SUITS[Math.floor(Math.random() * 4)]) {
+  const front = el.querySelector(".front");
+  front.classList.toggle("red", suit === "♥" || suit === "♦");
+  front.dataset.suit = suit;
+  front.innerHTML =
+    `<span class="card-corner top">${name}<small>${suit}</small></span>` +
+    `<span class="card-big">${suit}</span>` +
+    `<span class="card-corner bottom">${name}<small>${suit}</small></span>`;
+}
+
+// turn the next card face down straight away, with no flip
+function hideNextCard() {
+  const next = $("hilo-next");
+  next.classList.add("instant", "down");
+  void next.offsetWidth;
+  next.classList.remove("instant");
+}
+
+function showHiLoButtons(playing) {
+  $("hilo-guesses").hidden = !playing;
+  $("hilo-again").hidden = playing;
+  $("hilo-lower").disabled = $("hilo-higher").disabled = !playing;
+}
+
+function showTies(ties, prize) {
+  $("hilo-ties").hidden = ties === 0;
+  $("hilo-ties").textContent = `Tie ×${ties}`;
+  $("hilo-prize").textContent = prize;
+}
+
+// deal a new game, or show the one already going
+async function startHiLo() {
+  if (hiLoBusy) return;
+  hiLoBusy = true;
+  const out = $("hilo-outcome");
+  out.className = "outcome";
+  out.innerHTML = "&nbsp;";
+  $("hilo-lower").disabled = $("hilo-higher").disabled = true;
+  try {
+    const game = await api("/api/hilo/start", {});
+    hideNextCard();
+    drawCard($("hilo-current"), game.cardName);
+    showTies(game.ties, game.prize);
+    showPlayer(game.player);
+    showHiLoButtons(true);
+  } catch (err) {
+    out.className = "outcome lose";
+    out.textContent = err.message;
+    if (err.message === "Please log in.") show("login");
+  } finally {
+    hiLoBusy = false;
+  }
+}
+
+async function guessHiLo(guess) {
+  if (hiLoBusy) return;
+  hiLoBusy = true;
+  $("hilo-lower").disabled = $("hilo-higher").disabled = true;
+  const out = $("hilo-outcome");
+  out.className = "outcome";
+  out.innerHTML = "&nbsp;";
+  try {
+    const { turn, cardName, nextCardName, prize, player } = await api("/api/hilo/guess", { guess });
+    const next = $("hilo-next");
+    drawCard(next, nextCardName);
+    next.classList.remove("down"); // flip it over
+    await sleep(650);
+
+    if (turn.outcome === "TIE") {
+      showTies(turn.ties, prize);
+      out.innerHTML = `A tie, it's another ${nextCardName}! Guess again.` +
+        `<small>The prize is now ${prize} tokens.</small>`;
+      await sleep(1100);
+      // the tied card becomes the card to beat
+      drawCard($("hilo-current"), nextCardName, next.querySelector(".front").dataset.suit);
+      hideNextCard();
+      showHiLoButtons(true);
+      return;
+    }
+
+    const won = turn.outcome === "WIN";
+    out.className = "outcome " + (won ? "win" : "lose");
+    out.innerHTML = (won ? `You won! +${turn.tokenChange} tokens` : `You lost! ${turn.tokenChange} tokens`) +
+      `<small>You said ${guess.toLowerCase()} than ${cardName}, the next card was ${nextCardName}.</small>`;
+    showPlayer(player);
+    showHiLoButtons(false);
+  } catch (err) {
+    out.className = "outcome lose";
+    out.textContent = err.message;
+    if (err.message === "Please log in.") show("login");
+    else showHiLoButtons(true);
+  } finally {
+    hiLoBusy = false;
+  }
+}
+
+$("hilo-lower").addEventListener("click", () => guessHiLo("LOWER"));
+$("hilo-higher").addEventListener("click", () => guessHiLo("HIGHER"));
+$("hilo-again").addEventListener("click", startHiLo);
 
 // ---------- start: stay logged in after a page reload ----------
 (async () => {

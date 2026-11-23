@@ -53,12 +53,12 @@
           <span class="game-desc">Guess the total of two dice.</span>
           <span class="game-stake">Win or lose 10</span>
         </button>
-        <div class="game soon">
+        <button class="game" data-go="hilo">
           <span class="game-art">▲▼</span>
           <span class="game-name">Hi-Lo</span>
           <span class="game-desc">Higher or lower than the card?</span>
-          <span class="game-stake">Coming soon</span>
-        </div>
+          <span class="game-stake">Win or lose 15</span>
+        </button>
         <div class="game soon">
           <span class="game-art">♠</span>
           <span class="game-name">BlackJack</span>
@@ -88,6 +88,38 @@
         <p class="outcome" id="dice-outcome" aria-live="polite">&nbsp;</p>
         <div class="guesses" id="guesses"></div>
         <button class="btn gold" id="roll" disabled>Pick a number</button>
+      </div>
+    </section>
+
+    <!-- Hi-Lo -->
+    <section class="view" id="view-hilo" hidden>
+      <button class="link back" data-go="lobby">← Lobby</button>
+      <div class="table">
+        <h2 class="table-title">HI-LO</h2>
+        <p class="sub">Will the next card be higher or lower? Guess right to win 15 tokens, wrong and you lose 15.
+          On a tie you guess again, and every tie raises the prize.</p>
+        <div class="cards-row">
+          <div class="card-slot">
+            <span class="card-label">This card</span>
+            <div class="playing-card" id="hilo-current"><div class="card-inner">
+              <div class="card-face front"></div><div class="card-face back"></div>
+            </div></div>
+          </div>
+          <div class="card-slot">
+            <span class="card-label">Next card</span>
+            <div class="playing-card down" id="hilo-next"><div class="card-inner">
+              <div class="card-face front"></div><div class="card-face back"></div>
+            </div></div>
+          </div>
+        </div>
+        <p class="prize"><span class="ties-badge" id="hilo-ties" hidden></span>
+          A right guess wins <strong id="hilo-prize">15</strong> tokens</p>
+        <p class="outcome" id="hilo-outcome" aria-live="polite">&nbsp;</p>
+        <div class="hilo-buttons" id="hilo-guesses">
+          <button class="btn gold" id="hilo-lower" disabled>▼ Lower</button>
+          <button class="btn gold" id="hilo-higher" disabled>▲ Higher</button>
+        </div>
+        <button class="btn gold" id="hilo-again" hidden>Deal again</button>
       </div>
     </section>
   </main>
