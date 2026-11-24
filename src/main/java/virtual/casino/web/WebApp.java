@@ -3,6 +3,7 @@ package virtual.casino.web;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -14,6 +15,7 @@ import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
 import io.javalin.http.staticfiles.Location;
 import virtual.casino.core.Account;
+import virtual.casino.core.BlackJack;
 import virtual.casino.core.Dice;
 import virtual.casino.core.HiLo;
 import virtual.casino.core.Login;
@@ -35,6 +37,8 @@ public class WebApp {
     private static final String PLAYER = "player";
     /** Session key: the Hi-Lo game in progress, if there is one. */
     private static final String HILO = "hilo";
+    /** Session key: the BlackJack game in progress, if there is one. */
+    private static final String BLACKJACK = "blackjack";
 
     private final UserStore users;
     private final Random r = new Random();
@@ -59,6 +63,9 @@ public class WebApp {
             config.routes.post("/api/dice", this::dice);
             config.routes.post("/api/hilo/start", this::hiLoStart);
             config.routes.post("/api/hilo/guess", this::hiLoGuess);
+            config.routes.post("/api/blackjack/start", this::blackJackStart);
+            config.routes.post("/api/blackjack/hit", this::blackJackHit);
+            config.routes.post("/api/blackjack/stand", this::blackJackStand);
 
             //rules in core throw this for bad input: send the message to the page
             config.routes.exception(IllegalArgumentException.class, (e, ctx) ->
@@ -155,7 +162,7 @@ public class WebApp {
         }
         HiLo game = ctx.sessionAttribute(HILO);
         if (game == null) {
-            game = new HiLo(shuffledDeck());
+            game = new HiLo(shuffled(hiLoDeck()));
             ctx.sessionAttribute(HILO, game);
         }
         ctx.json(Map.of(
@@ -196,19 +203,106 @@ public class WebApp {
             "player", player(account, false)));
     }
 
+    /**
+     * Deal a new BlackJack game (rules in core/BlackJack.java).
+     * If a game is already going, that one is shown again instead.
+     * A 21 straight away ends the game at once.
+     */
+    private void blackJackStart(Context ctx) {
+        Account account = loggedIn(ctx);
+        if (account == null) {
+            return;
+        }
+        BlackJack game = ctx.sessionAttribute(BLACKJACK);
+        if (game == null) {
+            game = new BlackJack(shuffled(blackJackDeck()));
+            ctx.sessionAttribute(BLACKJACK, game);
+        }
+        sendBlackJack(ctx, account, game);
+    }
+
+    private void blackJackHit(Context ctx) {
+        Account account = loggedIn(ctx);
+        BlackJack game = account == null ? null : blackJackInProgress(ctx);
+        if (game != null) {
+            game.hit();
+            sendBlackJack(ctx, account, game);
+        }
+    }
+
+    private void blackJackStand(Context ctx) {
+        Account account = loggedIn(ctx);
+        BlackJack game = account == null ? null : blackJackInProgress(ctx);
+        if (game != null) {
+            game.stand();
+            sendBlackJack(ctx, account, game);
+        }
+    }
+
+    /** The BlackJack game in progress, or null after sending a 400. */
+    private BlackJack blackJackInProgress(Context ctx) {
+        BlackJack game = ctx.sessionAttribute(BLACKJACK);
+        if (game == null) {
+            error(ctx, HttpStatus.BAD_REQUEST, "Deal the cards first.");
+        }
+        return game;
+    }
+
+    /**
+     * Send the table. While the game is going only the dealer's first card is sent,
+     * so the page can't peek at the face-down one. When it's over the tokens are
+     * saved and the game is cleared, ready for the next deal.
+     */
+    private void sendBlackJack(Context ctx, Account account, BlackJack game) {
+        List<Integer> dealer = game.dealerHand();
+        Map<String, Object> table = new LinkedHashMap<>();
+        table.put("playerHand", game.playerHand());
+        table.put("playerTotal", BlackJack.handTotal(game.playerHand()));
+        if (game.isOver()) {
+            ctx.sessionAttribute(BLACKJACK, null);
+            account.addTokens(game.result().tokenChange());
+            users.save(account);
+            table.put("dealerHand", dealer);
+            table.put("dealerTotal", BlackJack.handTotal(dealer));
+            table.put("result", game.result());
+        }
+        else {
+            table.put("dealerHand", dealer.subList(0, 1));
+            table.put("dealerTotal", BlackJack.handTotal(dealer.subList(0, 1)));
+        }
+        table.put("over", game.isOver());
+        table.put("player", player(account, false));
+        ctx.json(table);
+    }
+
+    /** A BlackJack deck like the console version: aces are 1, and 10, J, Q and K are all 10. */
+    private static List<Integer> blackJackDeck() {
+        List<Integer> deck = new ArrayList<>();
+        for (int suit = 0; suit < 4; suit++) {
+            for (int card = 1; card <= 13; card++) {
+                deck.add(Math.min(card, 10));
+            }
+        }
+        return deck;
+    }
+
     /** What a right guess wins after this many ties (see core/HiLo.java). */
     private static int hiLoPrize(int ties) {
         return ties == 0 ? HiLo.PRIZE : HiLo.PRIZE * ties * 2;
     }
 
-    /** A shuffled Hi-Lo deck: 52 cards, four of each 1-13, like the console version. */
-    private List<Integer> shuffledDeck() {
+    /** A Hi-Lo deck: 52 cards, four of each 1-13, like the console version. */
+    private static List<Integer> hiLoDeck() {
         List<Integer> deck = new ArrayList<>();
         for (int suit = 0; suit < 4; suit++) {
             for (int card = 1; card <= 13; card++) {
                 deck.add(card);
             }
         }
+        return deck;
+    }
+
+    private List<Integer> shuffled(List<Integer> deck) {
         Collections.shuffle(deck, r);
         return deck;
     }
