@@ -59,12 +59,12 @@
           <span class="game-desc">Higher or lower than the card?</span>
           <span class="game-stake">Win or lose 15</span>
         </button>
-        <div class="game soon">
+        <button class="game" data-go="blackjack">
           <span class="game-art">♠</span>
           <span class="game-name">BlackJack</span>
           <span class="game-desc">Get to 21 without going over.</span>
-          <span class="game-stake">Coming soon</span>
-        </div>
+          <span class="game-stake">Win or lose 20</span>
+        </button>
         <div class="game soon">
           <span class="game-art">7</span>
           <span class="game-name">Lottery</span>
@@ -120,6 +120,30 @@
           <button class="btn gold" id="hilo-higher" disabled>▲ Higher</button>
         </div>
         <button class="btn gold" id="hilo-again" hidden>Deal again</button>
+      </div>
+    </section>
+
+    <!-- BlackJack -->
+    <section class="view" id="view-blackjack" hidden>
+      <button class="link back" data-go="lobby">← Lobby</button>
+      <div class="table">
+        <h2 class="table-title">BLACKJACK</h2>
+        <p class="sub">Get closer to 21 than the dealer without going over. Win 20 tokens, lose 20, or push and keep them.
+          The dealer draws until they have 17.</p>
+        <div class="bj-seat">
+          <span class="card-label">Dealer <span class="total" id="bj-dealer-total"></span></span>
+          <div class="bj-hand" id="bj-dealer"></div>
+        </div>
+        <div class="bj-seat">
+          <span class="card-label">You <span class="total" id="bj-player-total"></span></span>
+          <div class="bj-hand" id="bj-player"></div>
+        </div>
+        <p class="outcome" id="bj-outcome" aria-live="polite">&nbsp;</p>
+        <div class="hilo-buttons" id="bj-moves">
+          <button class="btn gold" id="bj-hit" disabled>Hit</button>
+          <button class="btn gold" id="bj-stand" disabled>Stand</button>
+        </div>
+        <button class="btn gold" id="bj-again" hidden>Deal again</button>
       </div>
     </section>
   </main>

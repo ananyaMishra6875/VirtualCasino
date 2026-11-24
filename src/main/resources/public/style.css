@@ -225,8 +225,29 @@ button.game:hover { transform: translateY(-4px); border-color: var(--gold); box-
 .hilo-buttons { display: flex; justify-content: center; gap: 16px; }
 .hilo-buttons .btn { min-width: 150px; }
 
+/* ---------- blackjack table ---------- */
+.bj-seat { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 22px; }
+.bj-hand { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; min-height: 134px; }
+.bj-hand .playing-card { width: 96px; height: 134px; }
+.bj-hand .card-big { font-size: 2.5rem; }
+.bj-hand .card-corner { font-size: 1.1rem; }
+.playing-card.dealt { animation: deal 0.35s ease-out; }
+@keyframes deal {
+  from { transform: translate(40px, -70px) rotate(-10deg); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.total {
+  display: inline-block; min-width: 2.2em; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+  background: rgba(0,0,0,0.35); color: var(--gold-light); letter-spacing: 0; font-weight: 600;
+}
+.total:empty { display: none; }
+
 @media (max-width: 560px) {
   .table { border-radius: var(--radius); }
+  .bj-hand .playing-card { width: 70px; height: 98px; }
+  .bj-hand { min-height: 98px; gap: 6px; }
+  .bj-hand .card-big { font-size: 1.8rem; }
+  .bj-hand .card-corner { font-size: 0.9rem; }
   .cards-row { gap: 20px; }
   .playing-card { width: 96px; height: 134px; }
   .card-big { font-size: 2.5rem; }

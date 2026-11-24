@@ -22,6 +22,7 @@ function show(view) {
   $("topbar").hidden = view === "login";
   if (view === "dice") resetDice();
   if (view === "hilo") startHiLo();
+  if (view === "blackjack") startBlackJack();
 }
 
 document.addEventListener("click", (e) => {
@@ -212,7 +213,10 @@ async function guessHiLo(guess) {
   try {
     const { turn, cardName, nextCardName, prize, player } = await api("/api/hilo/guess", { guess });
     const next = $("hilo-next");
-    drawCard(next, nextCardName);
+    const shownSuit = $("hilo-current").querySelector(".front").dataset.suit;
+    drawCard(next, nextCardName, nextCardName === cardName
+      ? SUITS.filter((x) => x !== shownSuit)[Math.floor(Math.random() * 3)]
+      : undefined);
     next.classList.remove("down"); // flip it over
     await sleep(650);
 
@@ -247,6 +251,138 @@ async function guessHiLo(guess) {
 $("hilo-lower").addEventListener("click", () => guessHiLo("LOWER"));
 $("hilo-higher").addEventListener("click", () => guessHiLo("HIGHER"));
 $("hilo-again").addEventListener("click", startHiLo);
+
+// ---------- blackjack ----------
+// The server sends card values (1-10). An ace is A, and a 10 is shown as
+// 10, J, Q or K at random: like the suits, that is only for looks.
+let bjBusy = false;
+let bjHole = null; // the dealer's face-down card while the game is going
+let bjUsed = new Set(); // faces already shown this game, so no card shows up twice
+
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+
+function bjFace(value) {
+  const names = value === 1 ? ["A"] : value === 10 ? ["10", "J", "Q", "K"] : [String(value)];
+  const free = names.flatMap((name) => SUITS.map((suit) => ({ name, suit })))
+    .filter((f) => !bjUsed.has(f.name + f.suit));
+  const face = pick(free);
+  bjUsed.add(face.name + face.suit);
+  return face;
+}
+
+function drawBjCard(card, value) {
+  const face = bjFace(value);
+  drawCard(card, face.name, face.suit);
+}
+
+// add a card to a hand with a dealing animation
+function dealCard(hand, value, faceDown = false) {
+  const card = document.createElement("div");
+  card.className = "playing-card dealt" + (faceDown ? " down" : "");
+  card.innerHTML = '<div class="card-inner"><div class="card-face front"></div><div class="card-face back"></div></div>';
+  if (!faceDown) drawBjCard(card, value);
+  hand.appendChild(card);
+  return card;
+}
+
+function showBjMoves(playing) {
+  $("bj-moves").hidden = !playing;
+  $("bj-again").hidden = playing;
+  $("bj-hit").disabled = $("bj-stand").disabled = !playing;
+}
+
+function bjError(err) {
+  const out = $("bj-outcome");
+  out.className = "outcome lose";
+  out.textContent = err.message;
+  if (err.message === "Please log in.") show("login");
+}
+
+// deal a new game (or show the one already going), one card at a time
+async function startBlackJack() {
+  if (bjBusy) return;
+  bjBusy = true;
+  showBjMoves(true);
+  $("bj-hit").disabled = $("bj-stand").disabled = true;
+  $("bj-outcome").className = "outcome";
+  $("bj-outcome").innerHTML = "&nbsp;";
+  $("bj-player").innerHTML = $("bj-dealer").innerHTML = "";
+  $("bj-player-total").textContent = $("bj-dealer-total").textContent = "";
+  bjUsed = new Set();
+  try {
+    const t = await api("/api/blackjack/start", {});
+    // like a real table: you, dealer, you, dealer (face down), then any cards you already hit
+    dealCard($("bj-player"), t.playerHand[0]); await sleep(300);
+    dealCard($("bj-dealer"), t.dealerHand[0]); await sleep(300);
+    dealCard($("bj-player"), t.playerHand[1]); await sleep(300);
+    bjHole = dealCard($("bj-dealer"), null, true); await sleep(300);
+    for (const v of t.playerHand.slice(2)) { dealCard($("bj-player"), v); await sleep(300); }
+    $("bj-player-total").textContent = t.playerTotal;
+    $("bj-dealer-total").textContent = t.dealerTotal;
+    showPlayer(t.player);
+    if (t.over) await finishBlackJack(t);
+    else $("bj-hit").disabled = $("bj-stand").disabled = false;
+  } catch (err) {
+    bjError(err);
+  } finally {
+    bjBusy = false;
+  }
+}
+
+async function bjMove(move) {
+  if (bjBusy) return;
+  bjBusy = true;
+  $("bj-hit").disabled = $("bj-stand").disabled = true;
+  try {
+    const t = await api("/api/blackjack/" + move, {});
+    if (move === "hit") {
+      dealCard($("bj-player"), t.playerHand[t.playerHand.length - 1]);
+      $("bj-player-total").textContent = t.playerTotal;
+      await sleep(400);
+    }
+    if (t.over) await finishBlackJack(t);
+    else $("bj-hit").disabled = $("bj-stand").disabled = false;
+  } catch (err) {
+    bjError(err);
+    if (err.message !== "Please log in.") showBjMoves(false);
+  } finally {
+    bjBusy = false;
+  }
+}
+
+// the dealer's turn: flip the face-down card, then draw the rest one by one
+async function finishBlackJack(t) {
+  $("bj-dealer-total").textContent = "…";
+  drawBjCard(bjHole, t.dealerHand[1]);
+  bjHole.classList.remove("down");
+  await sleep(700);
+  for (const v of t.dealerHand.slice(2)) {
+    dealCard($("bj-dealer"), v);
+    await sleep(500);
+  }
+  $("bj-dealer-total").textContent = t.dealerTotal;
+
+  const r = t.result;
+  const blackJack = r.playerTotal === 21 && t.playerHand.length === 2;
+  const out = $("bj-outcome");
+  out.className = "outcome " + (r.outcome === "WIN" ? "win" : r.outcome === "PUSH" ? "" : "lose");
+  const headline = {
+    WIN: (blackJack ? "BlackJack! " : "") + `You won! +${r.tokenChange} tokens`,
+    LOSE: `You lost! ${r.tokenChange} tokens`,
+    BUST: `Bust! ${r.tokenChange} tokens`,
+    PUSH: "Push! It's a tie, no tokens won or lost.",
+  }[r.outcome];
+  const detail = r.outcome === "BUST"
+    ? `You went over 21 with ${r.playerTotal}.`
+    : `You have ${r.playerTotal}, the dealer has ${r.dealerTotal}` + (r.dealerTotal > 21 ? " (bust)." : ".");
+  out.innerHTML = `${headline}<small>${detail}</small>`;
+  showPlayer(t.player);
+  showBjMoves(false);
+}
+
+$("bj-hit").addEventListener("click", () => bjMove("hit"));
+$("bj-stand").addEventListener("click", () => bjMove("stand"));
+$("bj-again").addEventListener("click", startBlackJack);
 
 // ---------- start: stay logged in after a page reload ----------
 (async () => {
