@@ -19,6 +19,8 @@ import virtual.casino.core.BlackJack;
 import virtual.casino.core.Dice;
 import virtual.casino.core.HiLo;
 import virtual.casino.core.Login;
+import virtual.casino.core.Lottery;
+import virtual.casino.core.LotteryStore;
 import virtual.casino.core.UserStore;
 
 /**
@@ -41,15 +43,17 @@ public class WebApp {
     private static final String BLACKJACK = "blackjack";
 
     private final UserStore users;
+    private final LotteryStore tickets;
     private final Random r = new Random();
 
-    public WebApp(UserStore users) {
+    public WebApp(UserStore users, LotteryStore tickets) {
         this.users = users;
+        this.tickets = tickets;
     }
 
     public static void main(String[] args) {
-        //same save file as the console version
-        new WebApp(new UserStore(Path.of("userInfo.txt"))).start(PORT);
+        //same save files as the console version
+        new WebApp(new UserStore(Path.of("userInfo.txt")), new LotteryStore(Path.of("lottery.txt"))).start(PORT);
         System.out.println("Virtual Casino is open at http://localhost:" + PORT);
     }
 
@@ -66,6 +70,8 @@ public class WebApp {
             config.routes.post("/api/blackjack/start", this::blackJackStart);
             config.routes.post("/api/blackjack/hit", this::blackJackHit);
             config.routes.post("/api/blackjack/stand", this::blackJackStand);
+            config.routes.get("/api/lottery", this::lottery);
+            config.routes.post("/api/lottery/buy", this::lotteryBuy);
 
             //rules in core throw this for bad input: send the message to the page
             config.routes.exception(IllegalArgumentException.class, (e, ctx) ->
@@ -79,6 +85,8 @@ public class WebApp {
     record LoginRequest(String name, String password) {}
     record DiceRequest(int guess) {}
     record HiLoRequest(HiLo.Guess guess) {}
+    /** Either 5 numbers, or random = true for a quick pick. */
+    record LotteryRequest(int[] numbers, boolean random) {}
 
     /** Log in, with 3 tries for the password like the console version. */
     private void login(Context ctx) {
@@ -201,6 +209,56 @@ public class WebApp {
             "nextCardName", HiLo.cardName(turn.nextCard()),
             "prize", hiLoPrize(turn.ties()),
             "player", player(account, false)));
+    }
+
+    /** The lottery's rules, and the player's tickets waiting for the next draw. */
+    private void lottery(Context ctx) {
+        Account account = loggedIn(ctx);
+        if (account != null) {
+            ctx.json(lotteryTable(account));
+        }
+    }
+
+    /**
+     * Buy a ticket (rules in core/Lottery.java) for the next draw, which the manager runs.
+     * The ticket is saved before the tokens are taken, so a bad ticket costs nothing.
+     */
+    private void lotteryBuy(Context ctx) {
+        Account account = loggedIn(ctx);
+        if (account == null) {
+            return;
+        }
+        LotteryRequest req = ctx.bodyAsClass(LotteryRequest.class);
+        int[] numbers = req.random() ? Lottery.randomNumbers(r) : req.numbers();
+        if (!Lottery.isValidTicket(numbers)) {
+            error(ctx, HttpStatus.BAD_REQUEST,
+                "Pick " + Lottery.NUMBERS + " different numbers from " + Lottery.MIN + "-" + Lottery.MAX + ".");
+            return;
+        }
+        tickets.add(account.name(), numbers);
+        account.addTokens(-Lottery.TICKET_COST);
+        users.save(account);
+        Map<String, Object> table = lotteryTable(account);
+        table.put("bought", numbers);
+        ctx.json(table);
+    }
+
+    private Map<String, Object> lotteryTable(Account account) {
+        List<int[]> mine = new ArrayList<>();
+        for (LotteryStore.Ticket t : tickets.all()) {
+            if (t.name().equals(account.name())) {
+                mine.add(t.numbers());
+            }
+        }
+        Map<String, Object> table = new LinkedHashMap<>();
+        table.put("tickets", mine);
+        table.put("cost", Lottery.TICKET_COST);
+        table.put("numbers", Lottery.NUMBERS);
+        table.put("min", Lottery.MIN);
+        table.put("max", Lottery.MAX);
+        table.put("prizes", Map.of(3, Lottery.prize(3), 4, Lottery.prize(4), 5, Lottery.prize(5)));
+        table.put("player", player(account, false));
+        return table;
     }
 
     /**
