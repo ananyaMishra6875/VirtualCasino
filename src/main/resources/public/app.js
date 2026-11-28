@@ -23,6 +23,7 @@ function show(view) {
   if (view === "dice") resetDice();
   if (view === "hilo") startHiLo();
   if (view === "blackjack") startBlackJack();
+  if (view === "lottery") openLottery();
 }
 
 document.addEventListener("click", (e) => {
@@ -383,6 +384,128 @@ async function finishBlackJack(t) {
 $("bj-hit").addEventListener("click", () => bjMove("hit"));
 $("bj-stand").addEventListener("click", () => bjMove("stand"));
 $("bj-again").addEventListener("click", startBlackJack);
+
+// ---------- lottery ----------
+// The server has the rules (how many numbers, the range, cost, prizes) and keeps the tickets.
+let lotto = null; // the rules from the server
+let lottoPicked = [];
+let lottoBusy = false;
+
+// a lottery ball; its colour shows which third of the range the number is in
+function ball(n, delay = 0) {
+  const b = document.createElement("span");
+  if (n === null) {
+    b.className = "ball empty";
+  } else {
+    const third = Math.min(3, 1 + Math.floor((3 * (n - lotto.min)) / (lotto.max - lotto.min + 1)));
+    b.className = "ball r" + third + (delay >= 0 ? " pop" : "");
+    b.dataset.n = n;
+    b.setAttribute("role", "img");
+    b.setAttribute("aria-label", String(n));
+    b.style.animationDelay = Math.max(delay, 0) + "ms";
+  }
+  return b;
+}
+
+async function openLottery() {
+  try {
+    const t = await api("/api/lottery");
+    lotto = t;
+    $("lotto-rules").textContent = `Pick ${t.numbers} different numbers from ${t.min}-${t.max}. A ticket costs ${t.cost} tokens.`;
+    $("lotto-prizes").innerHTML = Object.entries(t.prizes)
+      .map(([matches, prize]) => `<span class="prize-chip">${matches} match → <strong>${Number(prize).toLocaleString()}</strong></span>`)
+      .join("");
+    $("lotto-buy").textContent = `Buy ticket (${t.cost} tokens)`;
+    $("lotto-quick").textContent = `Quick pick (${t.cost} tokens)`;
+    if (!$("lotto-grid").children.length) {
+      for (let n = t.min; n <= t.max; n++) {
+        const b = document.createElement("button");
+        b.className = "lotto-num";
+        b.textContent = n;
+        b.dataset.n = n;
+        b.addEventListener("click", () => toggleNumber(n));
+        $("lotto-grid").appendChild(b);
+      }
+    }
+    lottoPicked = [];
+    $("lotto-outcome").className = "outcome";
+    $("lotto-outcome").innerHTML = "&nbsp;";
+    showPicked();
+    showTickets(t.tickets, false);
+    showPlayer(t.player);
+  } catch (err) {
+    $("lotto-outcome").className = "outcome lose";
+    $("lotto-outcome").textContent = err.message;
+    if (err.message === "Please log in.") show("login");
+  }
+}
+
+function toggleNumber(n) {
+  if (lottoBusy) return;
+  if (lottoPicked.includes(n)) lottoPicked = lottoPicked.filter((x) => x !== n);
+  else if (lottoPicked.length < lotto.numbers) lottoPicked.push(n);
+  showPicked();
+}
+
+function showPicked() {
+  const full = lottoPicked.length === lotto.numbers;
+  document.querySelectorAll(".lotto-num").forEach((b) => {
+    const picked = lottoPicked.includes(Number(b.dataset.n));
+    b.classList.toggle("picked", picked);
+    b.classList.toggle("full", full && !picked);
+  });
+  const row = $("lotto-picked");
+  row.innerHTML = "";
+  const sorted = [...lottoPicked].sort((a, b) => a - b);
+  for (let i = 0; i < lotto.numbers; i++) row.appendChild(ball(i < sorted.length ? sorted[i] : null, -1));
+  $("lotto-buy").disabled = !full || lottoBusy;
+  $("lotto-clear").disabled = !lottoPicked.length || lottoBusy;
+  $("lotto-quick").disabled = lottoBusy;
+}
+
+// the list of tickets; the newest one pops in when it was just bought
+function showTickets(tickets, newestPops) {
+  const list = $("lotto-tickets");
+  list.innerHTML = tickets.length ? "" : '<p class="none">No tickets yet. Pick your numbers above!</p>';
+  tickets.forEach((nums, i) => {
+    const pop = newestPops && i === tickets.length - 1;
+    const row = document.createElement("div");
+    row.className = "ticket";
+    row.innerHTML = `<span class="ticket-no">Ticket ${i + 1}</span>`;
+    const balls = document.createElement("div");
+    balls.className = "ball-row";
+    [...nums].sort((a, b) => a - b).forEach((n, j) => balls.appendChild(ball(n, pop ? j * 120 : -1)));
+    row.appendChild(balls);
+    list.appendChild(row);
+  });
+}
+
+async function buyTicket(body) {
+  if (lottoBusy) return;
+  lottoBusy = true;
+  showPicked();
+  const out = $("lotto-outcome");
+  try {
+    const t = await api("/api/lottery/buy", body);
+    lottoPicked = [];
+    out.className = "outcome win";
+    out.innerHTML = `Ticket bought! -${t.cost} tokens` +
+      `<small>Your numbers: ${[...t.bought].sort((a, b) => a - b).join(", ")}. Good luck in the draw!</small>`;
+    showTickets(t.tickets, true);
+    showPlayer(t.player);
+  } catch (err) {
+    out.className = "outcome lose";
+    out.textContent = err.message;
+    if (err.message === "Please log in.") show("login");
+  } finally {
+    lottoBusy = false;
+    showPicked();
+  }
+}
+
+$("lotto-buy").addEventListener("click", () => buyTicket({ numbers: lottoPicked }));
+$("lotto-quick").addEventListener("click", () => buyTicket({ random: true }));
+$("lotto-clear").addEventListener("click", () => { lottoPicked = []; showPicked(); });
 
 // ---------- start: stay logged in after a page reload ----------
 (async () => {

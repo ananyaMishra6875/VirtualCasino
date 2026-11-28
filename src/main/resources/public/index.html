@@ -65,12 +65,12 @@
           <span class="game-desc">Get to 21 without going over.</span>
           <span class="game-stake">Win or lose 20</span>
         </button>
-        <div class="game soon">
+        <button class="game" data-go="lottery">
           <span class="game-art">7</span>
           <span class="game-name">Lottery</span>
           <span class="game-desc">Pick your numbers for the draw.</span>
-          <span class="game-stake">Coming soon</span>
-        </div>
+          <span class="game-stake">Tickets cost 5</span>
+        </button>
       </div>
     </section>
 
@@ -144,6 +144,32 @@
           <button class="btn gold" id="bj-stand" disabled>Stand</button>
         </div>
         <button class="btn gold" id="bj-again" hidden>Deal again</button>
+      </div>
+    </section>
+
+    <!-- Lottery -->
+    <section class="view" id="view-lottery" hidden>
+      <button class="link back" data-go="lobby">← Lobby</button>
+      <div class="table">
+        <h2 class="table-title">LOTTERY</h2>
+        <p class="sub" id="lotto-rules">&nbsp;</p>
+        <div class="prizes" id="lotto-prizes"></div>
+        <div class="lotto-grid" id="lotto-grid"></div>
+        <div class="lotto-pick">
+          <span class="card-label">Your ticket</span>
+          <div class="ball-row" id="lotto-picked"></div>
+        </div>
+        <p class="outcome" id="lotto-outcome" aria-live="polite">&nbsp;</p>
+        <div class="hilo-buttons">
+          <button class="btn ghost" id="lotto-clear" disabled>Clear</button>
+          <button class="btn ghost" id="lotto-quick">Quick pick</button>
+          <button class="btn gold" id="lotto-buy" disabled>Buy ticket</button>
+        </div>
+      </div>
+      <div class="card tickets">
+        <h3>Your tickets for the next draw</h3>
+        <p class="sub">The manager runs the draw. Any winnings are added to your tokens then.</p>
+        <div id="lotto-tickets"></div>
       </div>
     </section>
   </main>
